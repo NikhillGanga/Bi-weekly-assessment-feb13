@@ -1,0 +1,41 @@
+<project name="practice" default="jar" basedir=".">
+
+    <!-- ===== Properties ===== -->
+    <property name="src.dir" value="src"/>
+    <property name="build.dir" value="build"/>
+    <property name="classes.dir" value="${build.dir}/classes"/>
+    <property name="jar.dir" value="${build.dir}/jar"/>
+    <property name="lib.dir" value="lib"/>
+
+    <!-- FULLY QUALIFIED MAIN CLASS -->
+    <property name="Driver.class" value="com.healthcare.digital.Driver"/>
+
+    <!-- ===== Clean ===== -->
+    <target name="clean">
+        <delete dir="${build.dir}"/>
+    </target>
+
+    <!-- ===== Compile ===== -->
+    <target name="compile" depends="clean">
+        <mkdir dir="${classes.dir}"/>
+
+        <javac srcdir="${src.dir}"
+               destdir="${classes.dir}"
+               includeantruntime="false"
+               debug="true"/>
+    </target>
+
+    <!-- ===== JAR ===== -->
+    <target name="jar" depends="compile">
+        <mkdir dir="${jar.dir}"/>
+
+        <jar destfile="${jar.dir}/DigitalHealthCare.jar">
+            <fileset dir="${classes.dir}"/>
+
+            <manifest>
+                <attribute name="Main-Class" value="${Driver.class}"/>
+            </manifest>
+        </jar>
+    </target>
+
+</project>
