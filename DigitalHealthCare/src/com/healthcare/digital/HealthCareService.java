@@ -2,7 +2,13 @@ package com.healthcare.digital;
 
 import java.time.LocalDate;
 import java.time.LocalTime;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.stream.Collectors;
 
 public class HealthCareService {
     private Map<String, Patient> patients;
@@ -34,8 +40,8 @@ public class HealthCareService {
             throw new InvalidUserException("Invalid doctor information");
         }
         if (doctors.containsKey(doctor.getId())) {
-            //throw new InvalidUserException("Doctor with ID " + doctor.getId() + " already exists");
-        	System.err.println("Doctor with ID " + doctor.getId() + " already exists");
+            System.err.println("Doctor with ID " + doctor.getId() + " already exists");
+            return;
         }
         doctors.put(doctor.getId(), doctor);
         System.out.println("Doctor added successfully: " + doctor.getName());
@@ -46,14 +52,8 @@ public class HealthCareService {
             throw new DoctorNotAvailableException("Doctor not found with ID: " + doctorId);
         }
         
-        // Check if doctor has any appointments
-        boolean hasAppointments = false;
-        for (Appointment apt : appointments) {
-            if (apt.getDoctor().getId().equals(doctorId)) {
-                hasAppointments = true;
-                break;
-            }
-        }
+        boolean hasAppointments = appointments.stream()
+            .anyMatch(apt -> apt.getDoctor().getId().equals(doctorId));
         
         if (hasAppointments) {
             System.out.println("Warning: Doctor has existing appointments. Removing anyway...");
@@ -70,12 +70,14 @@ public class HealthCareService {
         }
         
         System.out.println("\n--- List of All Doctors ---");
-        for (Doctor doctor : doctors.values()) {
-            System.out.println("ID: " + doctor.getId() + 
-                             " | Name: " + doctor.getName() + 
-                             " | Specialization: " + doctor.getSpecialization() + 
-                             " | Experience: " + doctor.getExperience() + " years");
-        }
+        // Using Java 8 streams and forEach with method reference
+        doctors.values().stream()
+            .forEach(doctor -> System.out.println(
+                "ID: " + doctor.getId() + 
+                " | Name: " + doctor.getName() + 
+                " | Specialization: " + doctor.getSpecialization() + 
+                " | Experience: " + doctor.getExperience() + " years"
+            ));
         System.out.println("---------------------------");
     }
 
@@ -83,23 +85,20 @@ public class HealthCareService {
                                 LocalDate date, LocalTime time) 
             throws InvalidUserException, DoctorNotAvailableException {
         
-        Patient patient = patients.get(patientId);
-        if (patient == null) {
-            throw new InvalidUserException("Patient not found with ID: " + patientId);
-        }
+        Patient patient = Optional.ofNullable(patients.get(patientId))
+            .orElseThrow(() -> new InvalidUserException("Patient not found with ID: " + patientId));
 
-        Doctor doctor = doctors.get(doctorId);
-        if (doctor == null) {
-            throw new DoctorNotAvailableException("Doctor not found with ID: " + doctorId);
-        }
+        Doctor doctor = Optional.ofNullable(doctors.get(doctorId))
+            .orElseThrow(() -> new DoctorNotAvailableException("Doctor not found with ID: " + doctorId));
 
+        boolean isAvailable = appointments.stream()
+            .noneMatch(apt -> apt.getDoctor().getId().equals(doctorId) && 
+                             apt.getDate().equals(date) && 
+                             apt.getTime().equals(time));
         
-        for (Appointment apt : appointments) {
-            if (apt.getDoctor().getId().equals(doctorId) && 
-                apt.getDate().equals(date) && apt.getTime().equals(time)) {
-                throw new DoctorNotAvailableException(
-                    "Doctor " + doctor.getName() + " is not available at " + time + " on " + date);
-            }
+        if (!isAvailable) {
+            throw new DoctorNotAvailableException(
+                "Doctor " + doctor.getName() + " is not available at " + time + " on " + date);
         }
 
         Appointment appointment = new Appointment(appointmentId, patient, doctor, date, time);
@@ -111,10 +110,8 @@ public class HealthCareService {
     public void addPrescription(String patientId, Prescription prescription) 
             throws InvalidUserException {
         
-        Patient patient = patients.get(patientId);
-        if (patient == null) {
-            throw new InvalidUserException("Patient not found with ID: " + patientId);
-        }
+        Patient patient = Optional.ofNullable(patients.get(patientId))
+            .orElseThrow(() -> new InvalidUserException("Patient not found with ID: " + patientId));
 
         patient.addPrescription(prescription);
         System.out.println("Prescription added for patient: " + patient.getName());
@@ -123,10 +120,8 @@ public class HealthCareService {
     public void addMedicalRecord(String patientId, MedicalRecord record) 
             throws InvalidUserException {
         
-        Patient patient = patients.get(patientId);
-        if (patient == null) {
-            throw new InvalidUserException("Patient not found with ID: " + patientId);
-        }
+        Patient patient = Optional.ofNullable(patients.get(patientId))
+            .orElseThrow(() -> new InvalidUserException("Patient not found with ID: " + patientId));
 
         patient.addMedicalRecord(record);
         
@@ -137,76 +132,53 @@ public class HealthCareService {
     }
 
     public Patient getPatient(String patientId) throws InvalidUserException {
-        Patient patient = patients.get(patientId);
-        if (patient == null) {
-            throw new InvalidUserException("Patient not found with ID: " + patientId);
-        }
-        return patient;
+        return Optional.ofNullable(patients.get(patientId))
+            .orElseThrow(() -> new InvalidUserException("Patient not found with ID: " + patientId));
     }
 
     public Doctor getDoctor(String doctorId) throws DoctorNotAvailableException {
-        Doctor doctor = doctors.get(doctorId);
-        if (doctor == null) {
-            throw new DoctorNotAvailableException("Doctor not found with ID: " + doctorId);
-        }
-        return doctor;
+        return Optional.ofNullable(doctors.get(doctorId))
+            .orElseThrow(() -> new DoctorNotAvailableException("Doctor not found with ID: " + doctorId));
     }
 
     public List<Appointment> getAppointmentsByPatient(String patientId) {
-        List<Appointment> patientAppointments = new ArrayList<>();
-        for (Appointment apt : appointments) {
-            if (apt.getPatient().getId().equals(patientId)) {
-                patientAppointments.add(apt);
-            }
-           
-        }
-        return patientAppointments;
+        return appointments.stream()
+            .filter(apt -> apt.getPatient().getId().equals(patientId))
+            .collect(Collectors.toList());
     }
 
     public List<Appointment> getAppointmentsByDoctor(String doctorId) {
-        List<Appointment> doctorAppointments = new ArrayList<>();
-        for (Appointment apt : appointments) {
-            if (apt.getDoctor().getId().equals(doctorId)) {
-                doctorAppointments.add(apt);
-            }
-        }
-        return doctorAppointments;
+        return appointments.stream()
+            .filter(apt -> apt.getDoctor().getId().equals(doctorId))
+            .collect(Collectors.toList());
     }
 
     public void cancelAppointment(String appointmentId) throws AppointmentNotFoundException {
-        Appointment appointmentToRemove = null;
-        for (Appointment apt : appointments) {
-            if (apt.getAppointmentId().equals(appointmentId)) {
-                appointmentToRemove = apt;
-                break;
-            }
-        }
+        Optional<Appointment> appointmentToRemove = appointments.stream()
+            .filter(apt -> apt.getAppointmentId().equals(appointmentId))
+            .findFirst();
 
-        if (appointmentToRemove == null) {
+        if (!appointmentToRemove.isPresent()) {
             throw new AppointmentNotFoundException(
                 "Appointment not found with ID: " + appointmentId);
         }
 
-        appointments.remove(appointmentToRemove);
+        appointments.remove(appointmentToRemove.get());
         System.out.println("Appointment cancelled: " + appointmentId);
     }
 
     public List<Prescription> getPrescriptionsByPatient(String patientId) 
             throws InvalidUserException {
         
-        Patient patient = patients.get(patientId);
-        if (patient == null) {
-            throw new InvalidUserException("Patient not found with ID: " + patientId);
-        }
+        Patient patient = Optional.ofNullable(patients.get(patientId))
+            .orElseThrow(() -> new InvalidUserException("Patient not found with ID: " + patientId));
         
         List<Prescription> prescriptions = patient.getPrescriptions();
         if (prescriptions.isEmpty()) {
             System.out.println("No prescriptions found for patient: " + patient.getName());
         } else {
             System.out.println("Prescriptions for " + patient.getName() + ":");
-            for (Prescription p : prescriptions) {
-                System.out.println(p);
-            }
+            prescriptions.forEach(System.out::println);
         }
         return prescriptions;
     }
@@ -220,6 +192,28 @@ public class HealthCareService {
                 "No medical records found for patient ID: " + patientId);
         }
         return records;
+    }
+
+    public List<Doctor> getDoctorsBySpecialization(String specialization) {
+        return doctors.values().stream()
+            .filter(doctor -> doctor.getSpecialization().equalsIgnoreCase(specialization))
+            .collect(Collectors.toList());
+    }
+
+    public List<Appointment> getUpcomingAppointments(LocalDate date) {
+        return appointments.stream()
+            .filter(apt -> !apt.getDate().isBefore(date))
+            .sorted(Comparator.comparing(Appointment::getDate)
+                    .thenComparing(Appointment::getTime))
+            .collect(Collectors.toList());
+    }
+
+    public Map<String, Long> getAppointmentCountByDoctor() {
+        return appointments.stream()
+            .collect(Collectors.groupingBy(
+                apt -> apt.getDoctor().getName(),
+                Collectors.counting()
+            ));
     }
 
     public Map<String, Patient> getPatients() {
